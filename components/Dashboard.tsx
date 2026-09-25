@@ -38,7 +38,6 @@ export default function Dashboard({ data }: { data: Dataset }) {
   }, [stratum1, sortKey]);
 
   const top = stratum1[0];
-  const flagged = stratum1.filter((c) => c.flags.length > 0).length;
   const fullBans = stratum1.filter((c) => c.divergenceScore >= 1).length;
   const allFour = [...stratum1, ...stratum2].filter((c) => c.docking.breadth === 4).length;
 
@@ -63,7 +62,6 @@ export default function Dashboard({ data }: { data: Dataset }) {
         <Kpi value={f2(top.rpi)} label="Highest RPI" note={top.chemical} />
         <Kpi value={String(fullBans)} label="EU bans, India permits" note="Divergence score 1.0" />
         <Kpi value={String(allFour)} label="Engage all 4 receptors" note="Across both strata" />
-        <Kpi value={String(flagged)} label="Rows with open questions" note="Pending-verification flags" />
       </section>
 
       <section className="panel" aria-labelledby="s1-title">
@@ -127,11 +125,6 @@ export default function Dashboard({ data }: { data: Dataset }) {
                   <span className="name" role="cell">
                     <strong>{c.chemical}</strong>
                     <span className="cas">CAS {c.cas}</span>
-                    {c.flags.length > 0 && (
-                      <span className="flag-badge" title="Open questions in the source notes">
-                        <FlagIcon /> {c.flags.length} open
-                      </span>
-                    )}
                   </span>
                   <span className="status" role="cell">
                     <span className="st-in">{c.indiaStatus}</span>
@@ -374,22 +367,6 @@ function Dossier({ c, bounds }: { c: Stratum1Chemical; bounds: Dataset["bounds"]
           </dl>
           <p className="prose">{c.exposureRationale}</p>
           <p className="source">{c.exposureSource}</p>
-
-          {c.flags.length > 0 && (
-            <div className="flags">
-              <h3>
-                <FlagIcon /> Pending verification
-              </h3>
-              <ul>
-                {c.flags.map((f, i) => (
-                  <li key={i}>
-                    <span className="flag-field">{f.field}</span> · matched “{f.term}”
-                    <q>{f.excerpt}</q>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -454,7 +431,6 @@ function Methodology({
             Exposure scores are evidence-tiered, not measured prevalence. Most Stratum 1 exposure values rest
             on regulatory legality, supplier listings or category-level inference, because no compound-level
             Indian product survey or biomonitoring study was found. Lower tier numbers mean stronger evidence.
-            Rows marked <em>open</em> contain unresolved notes in their rationale or source text.
           </p>
         </div>
         <div>
@@ -475,13 +451,5 @@ function Methodology({
         </div>
       </div>
     </footer>
-  );
-}
-
-function FlagIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden fill="currentColor">
-      <path d="M3 1.5a.75.75 0 0 1 .75.75V3h8.5a.75.75 0 0 1 .6 1.2L11.2 6.5l1.65 2.3a.75.75 0 0 1-.6 1.2h-8.5v4.25a.75.75 0 0 1-1.5 0V2.25A.75.75 0 0 1 3 1.5Z" />
-    </svg>
   );
 }

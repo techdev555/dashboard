@@ -19,8 +19,6 @@ export type Receptor = {
   engages: boolean;
 };
 
-export type Flag = { field: string; term: string; excerpt: string };
-
 export type Docking = {
   heavyAtoms: number;
   breadth: number;
@@ -47,7 +45,6 @@ export type Stratum1Chemical = {
   divergenceNorm: number;
   exposureNorm: number;
   rpi: number;
-  flags: Flag[];
 };
 
 export type Stratum2Chemical = {
@@ -70,42 +67,6 @@ export type Dataset = {
     exposure: [number, number];
   };
 };
-
-// Terms that mark a row as pending verification. The first four come from the
-// methodology doc; the rest catch open questions the authors left in the text.
-const FLAG_TERMS: { term: string; re: RegExp }[] = [
-  { term: "FLAG", re: /\bflag\b/i },
-  { term: "verification", re: /\bverification\b/i },
-  { term: "inference", re: /\binference\b/i },
-  { term: "precedent", re: /\bprecedent\b/i },
-  { term: "still to be", re: /\bstill to be\b/i },
-  { term: "confirm", re: /\bconfirm\b(?!ed)/i },
-  { term: "consider whether", re: /\bconsider whether\b/i },
-];
-
-function findFlags(fields: Record<string, string>): Flag[] {
-  const flags: Flag[] = [];
-  for (const [field, text] of Object.entries(fields)) {
-    for (const { term, re } of FLAG_TERMS) {
-      const m = re.exec(text);
-      if (!m) continue;
-      flags.push({ field, term, excerpt: sentenceAround(text, m.index) });
-    }
-  }
-  return flags;
-}
-
-// Return the clause (split on ". ", "; " or " - ") that contains position idx.
-function sentenceAround(text: string, idx: number): string {
-  const sep = /(\. |; | - )/g;
-  let start = 0;
-  for (const m of text.matchAll(sep)) {
-    const end = m.index! + m[0].length;
-    if (m.index! >= idx) return text.slice(start, m.index! + (m[0] === ". " ? 1 : 0)).trim();
-    start = end;
-  }
-  return text.slice(start).trim();
-}
 
 function readCsv(name: string) {
   return parseCsv(fs.readFileSync(path.join(process.cwd(), "data", name), "utf8"));
@@ -185,12 +146,6 @@ export function loadDataset(): Dataset {
         exposureRationale: exp.rationale,
         exposureSource: exp.source,
         docking: dockingOf(d),
-        flags: findFlags({
-          "Divergence rationale": div.rationale,
-          "Divergence source": div.source,
-          "Exposure rationale": exp.rationale,
-          "Exposure source": exp.source,
-        }),
       });
     } else {
       const { india, eu } = splitSource(div.source);

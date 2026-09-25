@@ -12,8 +12,6 @@
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
-  --flag: #a15c00;
-  --flag-bg: #fdf1dc;
   --ok: #0f7a3d;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
 }
@@ -33,8 +31,6 @@
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
-    --flag: #f0b35a;
-    --flag-bg: #3a2a10;
     --ok: #4cc47f;
     --shadow: none;
   }
@@ -53,8 +49,6 @@
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
-  --flag: #f0b35a;
-  --flag-bg: #3a2a10;
   --ok: #4cc47f;
   --shadow: none;
 }
@@ -190,20 +184,6 @@ code { font-family: var(--font-mono), monospace; font-size: 0.85em; background: 
 .arrow { color: var(--text-3); }
 .rpi { font-weight: 600; font-size: 15px; }
 
-.flag-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  align-self: flex-start;
-  margin-top: 3px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--flag);
-  background: var(--flag-bg);
-  border-radius: 999px;
-  padding: 1px 8px 1px 6px;
-}
-
 .bar-cell { display: block; padding: 10px 0; }
 .rpi-bar {
   display: flex;
@@ -284,12 +264,6 @@ code { font-family: var(--font-mono), monospace; font-size: 0.85em; background: 
   border-left: 2px solid var(--line-strong);
   padding-left: 10px;
 }
-.flags { margin-top: 12px; background: var(--flag-bg); border-radius: 8px; padding: 2px 14px 10px; }
-.flags h3 { color: var(--flag); }
-.flags ul { margin: 0; padding-left: 16px; font-size: 13px; }
-.flags li { margin-bottom: 6px; }
-.flags q { display: block; color: var(--text-2); font-style: italic; }
-.flag-field { font-weight: 600; }
 
 /* Stratum 2 */
 .s2-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }

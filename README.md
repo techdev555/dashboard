@@ -6,7 +6,6 @@ Stratum 1 and a separate "convergent prohibitions" view for Stratum 2.
 - Data lives in `data/*.csv` and is read **at build time** (`lib/data.ts`). No database, no API calls.
 - RPI = 0.4 × binding + 0.3 × divergence + 0.3 × exposure, min-max normalized across Stratum 1 only;
   binding (mean docking over ERα/ERβ/AR/TRβ) is inverted.
-- Pending-verification flags scan the rationale/source text of both CSVs (`FLAG_TERMS` in `lib/data.ts`).
 
 ## Update the data
 
