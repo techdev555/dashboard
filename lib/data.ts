@@ -17,6 +17,7 @@ export type Receptor = {
   score: number;
   threshold: number;
   engages: boolean;
+  binding: number;
 };
 
 export type Docking = {
@@ -24,6 +25,9 @@ export type Docking = {
   breadth: number;
   meanDocking: number;
   receptors: Receptor[];
+  // Control-anchored: glucose = 0, reference agonist = 1, mean over the 4 receptors.
+  // Comparable across strata. Not clipped, so it can be negative.
+  bindingAnchored: number;
 };
 
 export type Stratum1Chemical = {
@@ -41,7 +45,6 @@ export type Stratum1Chemical = {
   exposureRationale: string;
   exposureSource: string;
   docking: Docking;
-  bindingNorm: number;
   divergenceNorm: number;
   exposureNorm: number;
   rpi: number;
@@ -61,11 +64,6 @@ export type Stratum2Chemical = {
 export type Dataset = {
   stratum1: Stratum1Chemical[];
   stratum2: Stratum2Chemical[];
-  bounds: {
-    meanDocking: [number, number];
-    divergence: [number, number];
-    exposure: [number, number];
-  };
 };
 
 function readCsv(name: string) {
@@ -76,14 +74,6 @@ function num(v: string, what: string): number {
   const n = Number(v);
   if (!Number.isFinite(n)) throw new Error(`Expected a number for ${what}, got "${v}"`);
   return n;
-}
-
-function minMax(values: number[]): [number, number] {
-  return [Math.min(...values), Math.max(...values)];
-}
-
-function norm(v: number, [lo, hi]: [number, number]): number {
-  return hi === lo ? 0 : (v - lo) / (hi - lo);
 }
 
 function splitSource(source: string): { india: string; eu: string } {
@@ -103,6 +93,15 @@ export function loadDataset(): Dataset {
     new Map(rows.map((r) => [r.chemical, r]));
   const divMap = byName(divergence);
   const expMap = byName(exposure);
+  const dockMap = byName(docking);
+
+  // Every chemical must appear in all three files, spelled identically.
+  const allNames = new Set([...divMap.keys(), ...expMap.keys(), ...dockMap.keys()]);
+  for (const [file, m] of [["divergence_22.csv", divMap], ["exposure_22.csv", expMap], ["docking_22.csv", dockMap]] as const) {
+    for (const name of allNames) {
+      if (!m.has(name)) throw new Error(`"${name}" is missing from ${file}`);
+    }
+  }
 
   const dockingOf = (row: Record<string, string>): Docking => {
     const receptors = RECEPTORS.map(({ key, label }) => ({
@@ -111,16 +110,18 @@ export function loadDataset(): Dataset {
       score: num(row[`score_${key}`], `${row.chemical} score_${key}`),
       threshold: num(row[`threshold_${key}`], `${row.chemical} threshold_${key}`),
       engages: row[`engages_${key}`].toLowerCase() === "yes",
+      binding: num(row[`binding_${key}`], `${row.chemical} binding_${key}`),
     }));
     return {
       heavyAtoms: num(row.heavy_atoms, `${row.chemical} heavy_atoms`),
       breadth: receptors.filter((r) => r.engages).length,
       meanDocking: receptors.reduce((s, r) => s + r.score, 0) / receptors.length,
       receptors,
+      bindingAnchored: num(row.binding_anchored, `${row.chemical} binding_anchored`),
     };
   };
 
-  const s1Raw: Omit<Stratum1Chemical, "rank" | "bindingNorm" | "divergenceNorm" | "exposureNorm" | "rpi">[] = [];
+  const s1Raw: Omit<Stratum1Chemical, "rank" | "rpi">[] = [];
   const stratum2: Stratum2Chemical[] = [];
 
   for (const d of docking) {
@@ -139,10 +140,12 @@ export function loadDataset(): Dataset {
         euStatus: div.eu_status,
         verification: div.verification,
         divergenceScore: num(div.divergence_score, `${d.chemical} divergence_score`),
+        divergenceNorm: num(div.divergence_norm, `${d.chemical} divergence_norm`),
         divergenceRationale: div.rationale,
         divergenceSource: div.source,
         exposureScore: num(exp.exposure_score, `${d.chemical} exposure_score`),
         exposureTier: num(exp.exposure_tier, `${d.chemical} exposure_tier`),
+        exposureNorm: num(exp.exposure_norm, `${d.chemical} exposure_norm`),
         exposureRationale: exp.rationale,
         exposureSource: exp.source,
         docking: dockingOf(d),
@@ -162,31 +165,20 @@ export function loadDataset(): Dataset {
     }
   }
 
-  // Normalize across Stratum 1 only; Stratum 2 is unscored by design.
-  const bounds = {
-    meanDocking: minMax(s1Raw.map((c) => c.docking.meanDocking)),
-    divergence: minMax(s1Raw.map((c) => c.divergenceScore)),
-    exposure: minMax(s1Raw.map((c) => c.exposureScore)),
-  };
-
+  // All three RPI terms come pre-computed from the CSVs; the dashboard does no normalization.
+  // Stratum 2 is unscored by design.
   const stratum1 = s1Raw
     .map((c) => {
-      // More negative docking = stronger binding, so invert after normalizing.
-      const bindingNorm = 1 - norm(c.docking.meanDocking, bounds.meanDocking);
-      const divergenceNorm = norm(c.divergenceScore, bounds.divergence);
-      const exposureNorm = norm(c.exposureScore, bounds.exposure);
       const rpi =
-        WEIGHTS.binding * bindingNorm +
-        WEIGHTS.divergence * divergenceNorm +
-        WEIGHTS.exposure * exposureNorm;
-      return { ...c, bindingNorm, divergenceNorm, exposureNorm, rpi, rank: 0 };
+        WEIGHTS.binding * c.docking.bindingAnchored +
+        WEIGHTS.divergence * c.divergenceNorm +
+        WEIGHTS.exposure * c.exposureNorm;
+      return { ...c, rpi, rank: 0 };
     })
     .sort((a, b) => b.rpi - a.rpi)
     .map((c, i) => ({ ...c, rank: i + 1 }));
 
-  stratum2.sort(
-    (a, b) => b.docking.breadth - a.docking.breadth || a.docking.meanDocking - b.docking.meanDocking
-  );
+  stratum2.sort((a, b) => b.docking.bindingAnchored - a.docking.bindingAnchored);
 
-  return { stratum1, stratum2, bounds };
+  return { stratum1, stratum2 };
 }

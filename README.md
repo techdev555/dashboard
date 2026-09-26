@@ -4,8 +4,8 @@ Next.js dashboard for the 22-chemical EDC panel: an India-vs-EU Risk-Priority In
 Stratum 1 and a separate "convergent prohibitions" view for Stratum 2.
 
 - Data lives in `data/*.csv` and is read **at build time** (`lib/data.ts`). No database, no API calls.
-- RPI = 0.4 × binding + 0.3 × divergence + 0.3 × exposure, min-max normalized across Stratum 1 only;
-  binding (mean docking over ERα/ERβ/AR/TRβ) is inverted.
+- RPI = 0.4 × binding_anchored + 0.3 × divergence_norm + 0.3 × exposure_norm, all three read straight
+  from the CSVs. The dashboard does no normalization; binding is control-anchored (glucose 0, agonist 1).
 
 ## Update the data
 

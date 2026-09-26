@@ -15,19 +15,20 @@ type SortKey = "rpi" | "binding" | "divergence" | "exposure" | "breadth";
 
 const SORTS: { key: SortKey; label: string; value: (c: Stratum1Chemical) => number }[] = [
   { key: "rpi", label: "RPI", value: (c) => c.rpi },
-  { key: "binding", label: "Binding", value: (c) => c.bindingNorm },
+  { key: "binding", label: "Binding", value: (c) => c.docking.bindingAnchored },
   { key: "divergence", label: "Divergence", value: (c) => c.divergenceNorm },
   { key: "exposure", label: "Exposure", value: (c) => c.exposureNorm },
-  { key: "breadth", label: "Receptor breadth", value: (c) => c.docking.breadth + c.bindingNorm / 10 },
+  { key: "breadth", label: "Receptor breadth", value: (c) => c.docking.breadth + c.docking.bindingAnchored / 10 },
 ];
 
 type Tip = { x: number; y: number; title: string; lines: string[] } | null;
 
 const f2 = (n: number) => n.toFixed(2);
 const f3 = (n: number) => n.toFixed(3);
+const f4 = (n: number) => n.toFixed(4);
 
 export default function Dashboard({ data }: { data: Dataset }) {
-  const { stratum1, stratum2, bounds } = data;
+  const { stratum1, stratum2 } = data;
   const [sortKey, setSortKey] = useState<SortKey>("rpi");
   const [open, setOpen] = useState<string | null>(stratum1[0]?.chemical ?? null);
   const [tip, setTip] = useState<Tip>(null);
@@ -59,8 +60,8 @@ export default function Dashboard({ data }: { data: Dataset }) {
 
       <section className="kpis" aria-label="Summary">
         <Kpi value={String(stratum1.length + stratum2.length)} label="Chemicals screened" note={`${stratum1.length} ranked · ${stratum2.length} convergent`} />
-        <Kpi value={f2(top.rpi)} label="Highest RPI" note={top.chemical} />
-        <Kpi value={String(fullBans)} label="EU bans, India permits" note="Divergence score 1.0" />
+        <Kpi value={f3(top.rpi)} label="Highest RPI" note={top.chemical} />
+        <Kpi value={String(fullBans)} label="Prohibited by the EU, not by India" note="Divergence score 1.0" />
         <Kpi value={String(allFour)} label="Engage all 4 receptors" note="Across both strata" />
       </section>
 
@@ -70,8 +71,8 @@ export default function Dashboard({ data }: { data: Dataset }) {
             <p className="eyebrow">Stratum 1 · RPI-eligible · n={stratum1.length}</p>
             <h2 id="s1-title">Risk-Priority ranking</h2>
             <p className="sub">
-              RPI = 0.4 × binding + 0.3 × divergence + 0.3 × exposure, each min-max normalized within
-              Stratum 1. Click a row for its full dossier.
+              RPI = 0.4 × binding + 0.3 × divergence + 0.3 × exposure. Binding is control-anchored
+              (glucose = 0, reference agonist = 1). Click a row for its full dossier.
             </p>
           </div>
           <div className="controls">
@@ -134,12 +135,12 @@ export default function Dashboard({ data }: { data: Dataset }) {
                   <span className="bar-cell" role="cell" onMouseLeave={() => setTip(null)}>
                     <RpiBar c={c} onHover={showTip} />
                   </span>
-                  <span className="num rpi" role="cell">{f3(c.rpi)}</span>
+                  <span className="num rpi" role="cell">{f4(c.rpi)}</span>
                   <span className="num" role="cell">
                     <BreadthDots docking={c.docking} />
                   </span>
                 </button>
-                {isOpen && <Dossier c={c} bounds={bounds} />}
+                {isOpen && <Dossier c={c} />}
               </Fragment>
             );
           })}
@@ -153,7 +154,8 @@ export default function Dashboard({ data }: { data: Dataset }) {
             <h2 id="s2-title">Already prohibited in both India &amp; the EU</h2>
             <p className="sub">
               No divergence to rank, so no RPI, rank, divergence or exposure score — these are unscored
-              by design. Docking is shown for context: some still engage every receptor tested.
+              by design. Docking is shown for context: these span the same range of receptor engagement as the
+              divergent set, which is why regulatory status cannot be read as a proxy for hazard.
             </p>
           </div>
         </div>
@@ -164,7 +166,7 @@ export default function Dashboard({ data }: { data: Dataset }) {
         </div>
       </section>
 
-      <Methodology stratum1Count={stratum1.length} stratum2Count={stratum2.length} bounds={bounds} />
+      <Methodology stratum2Count={stratum2.length} />
 
       {tip && (
         <div className="tooltip" style={{ left: tip.x + 14, top: tip.y + 14 }} role="tooltip">
@@ -196,7 +198,7 @@ function RpiBar({
   onHover: (e: React.MouseEvent, title: string, lines: string[]) => void;
 }) {
   const parts = [
-    { ...COMPONENTS[0], norm: c.bindingNorm },
+    { ...COMPONENTS[0], norm: c.docking.bindingAnchored },
     { ...COMPONENTS[1], norm: c.divergenceNorm },
     { ...COMPONENTS[2], norm: c.exposureNorm },
   ];
@@ -212,7 +214,7 @@ function RpiBar({
             style={{ width: `${contrib * 100}%`, background: p.color }}
             onMouseMove={(e) =>
               onHover(e, `${c.chemical} · ${p.label}`, [
-                `Normalized ${f3(p.norm)} × ${p.weight}`,
+                `Term ${f4(p.norm)} × ${p.weight}`,
                 `Contributes ${f3(contrib)} of ${f3(c.rpi)}`,
               ])
             }
@@ -245,6 +247,7 @@ function ReceptorTable({ docking }: { docking: Docking }) {
           <th>Receptor</th>
           <th className="num">Score</th>
           <th className="num">Threshold</th>
+          <th className="num">Binding</th>
           <th aria-label="Score vs threshold" />
           <th>Engages</th>
         </tr>
@@ -255,6 +258,7 @@ function ReceptorTable({ docking }: { docking: Docking }) {
             <td>{r.label}</td>
             <td className="num">{f3(r.score)}</td>
             <td className="num muted">{f3(r.threshold)}</td>
+            <td className="num">{f4(r.binding)}</td>
             <td className="rec-bar-cell">
               <span className="rec-bar">
                 <span className={`rec-fill ${r.engages ? "on" : ""}`} style={{ width: scale(r.score) }} />
@@ -269,36 +273,42 @@ function ReceptorTable({ docking }: { docking: Docking }) {
         <tr>
           <td>Mean</td>
           <td className="num">{f3(docking.meanDocking)}</td>
-          <td colSpan={3} className="muted">
-            {docking.breadth}/4 engaged · {docking.heavyAtoms} heavy atoms · kcal/mol, more negative = stronger
+          <td />
+          <td className="num strong">{f4(docking.bindingAnchored)}</td>
+          <td colSpan={2} className="muted">
+            {docking.breadth}/4 engaged
           </td>
         </tr>
       </tfoot>
+      <caption className="rec-caption">
+        Scores in kcal/mol, more negative = stronger. Binding: glucose = 0, reference agonist = 1.{" "}
+        {docking.heavyAtoms} heavy atoms.
+      </caption>
     </table>
   );
 }
 
-function Dossier({ c, bounds }: { c: Stratum1Chemical; bounds: Dataset["bounds"] }) {
+function Dossier({ c }: { c: Stratum1Chemical }) {
   const breakdown = [
     {
       label: "Binding",
-      raw: `${f3(c.docking.meanDocking)} kcal/mol`,
-      range: `${f2(bounds.meanDocking[0])} … ${f2(bounds.meanDocking[1])}, inverted`,
-      norm: c.bindingNorm,
+      raw: `${f3(c.docking.meanDocking)} kcal/mol mean`,
+      note: "Control-anchored, mean of 4 receptors",
+      term: c.docking.bindingAnchored,
       weight: WEIGHTS.binding,
     },
     {
       label: "Divergence",
       raw: f2(c.divergenceScore),
-      range: `${f2(bounds.divergence[0])} … ${f2(bounds.divergence[1])}`,
-      norm: c.divergenceNorm,
+      note: "Min-max normalized in Stratum 1",
+      term: c.divergenceNorm,
       weight: WEIGHTS.divergence,
     },
     {
       label: "Exposure",
       raw: `${f2(c.exposureScore)} (tier ${c.exposureTier})`,
-      range: `${f2(bounds.exposure[0])} … ${f2(bounds.exposure[1])}`,
-      norm: c.exposureNorm,
+      note: "Min-max normalized in Stratum 1",
+      term: c.exposureNorm,
       weight: WEIGHTS.exposure,
     },
   ];
@@ -313,7 +323,7 @@ function Dossier({ c, bounds }: { c: Stratum1Chemical; bounds: Dataset["bounds"]
               <tr>
                 <th>Component</th>
                 <th>Raw</th>
-                <th className="num">Norm</th>
+                <th className="num">Term</th>
                 <th className="num">× w</th>
               </tr>
             </thead>
@@ -323,17 +333,17 @@ function Dossier({ c, bounds }: { c: Stratum1Chemical; bounds: Dataset["bounds"]
                   <td>{b.label}</td>
                   <td>
                     {b.raw}
-                    <span className="range">S1 range {b.range}</span>
+                    <span className="range">{b.note}</span>
                   </td>
-                  <td className="num">{f3(b.norm)}</td>
-                  <td className="num">{f3(b.norm * b.weight)}</td>
+                  <td className="num">{f4(b.term)}</td>
+                  <td className="num">{f4(b.term * b.weight)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr>
                 <td colSpan={3}>RPI (rank {c.rank})</td>
-                <td className="num strong">{f3(c.rpi)}</td>
+                <td className="num strong">{f4(c.rpi)}</td>
               </tr>
             </tfoot>
           </table>
@@ -393,22 +403,14 @@ function S2Card({ c }: { c: Stratum2Chemical }) {
       <div className="s2-dock">
         <BreadthDots docking={c.docking} />
         <span className="muted">
-          {c.docking.breadth}/4 · mean {f2(c.docking.meanDocking)} kcal/mol
+          binding {f3(c.docking.bindingAnchored)} · {c.docking.breadth}/4 · mean {f2(c.docking.meanDocking)} kcal/mol
         </span>
       </div>
     </article>
   );
 }
 
-function Methodology({
-  stratum1Count,
-  stratum2Count,
-  bounds,
-}: {
-  stratum1Count: number;
-  stratum2Count: number;
-  bounds: Dataset["bounds"];
-}) {
+function Methodology({ stratum2Count }: { stratum2Count: number }) {
   return (
     <footer className="method">
       <h2>Methodology</h2>
@@ -417,12 +419,12 @@ function Methodology({
           <h3>Risk-Priority Index</h3>
           <p className="formula">RPI = 0.4 × binding + 0.3 × divergence + 0.3 × exposure</p>
           <p>
-            Binding is the mean docking score across ERα, ERβ, AR and TRβ. Each component is min-max
-            normalized across the {stratum1Count} Stratum 1 chemicals only (mean docking {f2(bounds.meanDocking[0])} to{" "}
-            {f2(bounds.meanDocking[1])} kcal/mol; divergence {f2(bounds.divergence[0])}–{f2(bounds.divergence[1])};
-            exposure {f2(bounds.exposure[0])}–{f2(bounds.exposure[1])}). Binding is inverted after normalizing,
-            because a more negative docking score means stronger binding. A receptor counts as engaged when its
-            score is at or below that receptor&rsquo;s threshold.
+            Binding is control-anchored per receptor: glucose scores 0 and the reference agonist scores 1,
+            so binding = (glucose − compound) / (glucose − agonist), averaged over ERα, ERβ, AR and TRβ.
+            The scale does not depend on which chemicals are in the panel, so it is comparable across both
+            strata. It is not clipped at zero: a chemical that binds more weakly than glucose, such as kojic
+            acid, gets a negative value. Divergence and exposure are min-max normalized within Stratum 1 and
+            supplied pre-computed in the CSVs; the dashboard does no normalization of its own.
           </p>
         </div>
         <div>
@@ -430,7 +432,11 @@ function Methodology({
           <p>
             Exposure scores are evidence-tiered, not measured prevalence. Most Stratum 1 exposure values rest
             on regulatory legality, supplier listings or category-level inference, because no compound-level
-            Indian product survey or biomonitoring study was found. Lower tier numbers mean stronger evidence.
+            Indian product survey or biomonitoring study was found. Lower tier numbers mean stronger evidence:
+            tier 1 (0.65–0.80) is direct India product-survey data, tier 2 (0.50–0.60) category-level India
+            data, tier 3 (0.40–0.50) a global product-survey proxy, tier 4 (0.35–0.45) a global category proxy
+            and tier 5 (0.30–0.40) a regulatory-status proxy only. Every assigned score sits inside its own
+            tier&rsquo;s band, a constraint the pipeline enforces.
           </p>
         </div>
         <div>
@@ -438,8 +444,17 @@ function Methodology({
           <p>
             The {stratum2Count} Stratum 2 chemicals are prohibited in both India (IS 4707 Annex A) and the EU
             (Reg. 1223/2009 Annex II). With no divergence to measure, they carry no RPI, rank, divergence or
-            exposure score. That is deliberate, not missing data. They are excluded from normalization so that
-            they do not shift Stratum 1&rsquo;s bounds.
+            exposure score. That is deliberate, not missing data. Their anchored binding is shown because it
+            is on the same fixed scale as Stratum 1&rsquo;s.
+          </p>
+        </div>
+        <div>
+          <h3>Receptor thresholds</h3>
+          <p>
+            A receptor&rsquo;s threshold is its glucose score minus 2.85 kcal/mol, AutoDock Vina&rsquo;s
+            published standard error. Glucose is the inert negative control; the positive controls are
+            estradiol at ERα and ERβ, DHT at AR, and GC-1 at TRβ. Across the 22 chemicals there are 23
+            engagements (7 at ERα, 6 at ERβ, 3 at AR, 7 at TRβ), and 14 chemicals engage no receptor at all.
           </p>
         </div>
         <div>
